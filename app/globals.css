@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { margin: 0; background: #f7fbf8; color: #0f172a; }
+input, select, textarea, button { font: inherit; }
