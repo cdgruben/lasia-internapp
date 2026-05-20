@@ -147,7 +147,7 @@ export default function App() {
   const visibleOrders = useMemo(() => activeOrders.filter((o) => o.status !== "planning"), [activeOrders]);
   const selectedPlanningOrder = planningOrders.find((o) => o.id === planningOrderId) ?? null;
   const archiveMatches = archiveOrders.filter((o) => `${o.order_number} ${o.customer_name} ${o.address}`.toLowerCase().includes(archiveSearch.toLowerCase()));
-  const tabs = profile.role === "admin" ? ["oversikt", "ordre", "planning", "invoice", "archive", "timer"] : ["oversikt", "ordre", "kalender", "timer"];
+  const tabs = profile?.role === "admin" ? ["oversikt", "ordre", "planning", "invoice", "archive", "timer"] : ["oversikt", "ordre", "kalender", "timer"];
   const calculatedHours = calculateHours(timeForm.start_time, timeForm.end_time);
 
   if (!user || !profile) return <main className="grid min-h-screen place-items-center p-4"><form onSubmit={login} className="w-full max-w-md rounded-lg border border-emerald-100 bg-white p-5 shadow-sm"><p className="font-semibold text-emerald-700">Låsia AS internapp</p><h1 className="mt-1 text-2xl font-bold">Logg inn</h1><input className="mt-5 w-full rounded-lg border p-3" placeholder="E-post" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /><input className="mt-3 w-full rounded-lg border p-3" placeholder="Passord" type="password" value={password} onChange={(e) => setPassword(e.target.value)} /><button className="mt-4 w-full rounded-lg bg-emerald-700 p-3 font-semibold text-white">Logg inn</button>{message && <p className="mt-3 rounded bg-red-50 p-3 text-sm text-red-700">{message}</p>}</form></main>;
