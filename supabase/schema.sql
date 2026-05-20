@@ -136,5 +136,5 @@ create policy "Time entries: employees create own entries on accessible orders" 
 create policy "Time entries: employees edit unapproved own entries, admins edit all" on public.time_entries for update using (public.is_admin() or (employee_id = auth.uid() and approved = false)) with check (public.is_admin() or (employee_id = auth.uid() and approved = false));
 create policy "Time entries: admins delete" on public.time_entries for delete using (public.is_admin());
 
-create or replace view public.tripletex_time_export as select te.entry_date, p.full_name as employee_name, p.email as employee_email, o.order_number, o.customer_name, o.tripletex_id, te.entry_method, te.start_time, te.end_time, te.hours, te.work_type, te.comment, te.approved from public.time_entries te join public.profiles p on p.id = te.employee_id join public.orders o on o.id = te.order_id;
+create or replace view public.tripletex_time_export as select te.entry_date, p.full_name as employee_name, p.email as employee_email, o.order_number, o.customer_name, o.tripletex_id, te.start_time, te.end_time, te.hours, te.work_type, te.comment, te.approved, te.entry_method from public.time_entries te join public.profiles p on p.id = te.employee_id join public.orders o on o.id = te.order_id;
 comment on column public.orders.tripletex_id is 'Reserved for future Tripletex order/project/customer mapping.';
