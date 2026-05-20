@@ -50,7 +50,8 @@ function icsLine(name: string, value: string) {
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
+  const { token: rawToken } = await params;
+  const token = rawToken.replace(/\.ics$/i, "");
 
   if (!token || token.length < 24) {
     return new Response("Ugyldig kalender-token", { status: 404 });
