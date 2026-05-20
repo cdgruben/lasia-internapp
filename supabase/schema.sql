@@ -40,6 +40,15 @@ create table public.orders (
   updated_at timestamptz not null default now()
 );
 
+create table public.order_participants (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  finished_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (order_id, user_id)
+);
+
 create table public.time_entries (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.orders(id) on delete cascade,
@@ -68,6 +77,9 @@ create index orders_order_date_idx on public.orders(order_date);
 create index orders_status_idx on public.orders(status);
 create index orders_scheduled_start_idx on public.orders(scheduled_start);
 create index orders_scheduled_end_idx on public.orders(scheduled_end);
+create index order_participants_order_id_idx on public.order_participants(order_id);
+create index order_participants_user_id_idx on public.order_participants(user_id);
+create index order_participants_finished_at_idx on public.order_participants(finished_at);
 create index time_entries_employee_id_idx on public.time_entries(employee_id);
 create index time_entries_order_id_idx on public.time_entries(order_id);
 create index time_entries_entry_date_idx on public.time_entries(entry_date);
@@ -91,8 +103,27 @@ end;
 $$;
 create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
 
-create or replace function public.is_admin() returns boolean language sql stable security definer set search_path = public as $$ select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'); $$;
-create or replace function public.can_access_order(order_row public.orders) returns boolean language sql stable security definer set search_path = public as $$ select public.is_admin() or order_row.assigned_employee_id = auth.uid(); $$;
+create or replace function public.is_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin');
+$$;
+
+create or replace function public.is_order_participant(p_order_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1
+    from public.order_participants op
+    where op.order_id = p_order_id
+      and op.user_id = auth.uid()
+  );
+$$;
+
+create or replace function public.can_access_order(order_row public.orders)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.is_admin()
+    or order_row.assigned_employee_id = auth.uid()
+    or public.is_order_participant(order_row.id);
+$$;
 
 create or replace function public.enforce_profile_role_update()
 returns trigger language plpgsql security definer set search_path = public as $$
@@ -117,6 +148,10 @@ create trigger enforce_profile_role_update_trigger before update on public.profi
 create or replace function public.enforce_order_flow_update()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
+  if current_user in ('postgres', 'service_role', 'supabase_admin') then
+    return new;
+  end if;
+
   if public.is_admin() then
     if new.status = 'invoiced_archived' and old.status is distinct from 'invoiced_archived' then
       new.invoiced_at = coalesce(new.invoiced_at, now());
@@ -125,23 +160,63 @@ begin
     return new;
   end if;
 
-  if old.assigned_employee_id = auth.uid() and new.status = 'in_progress' and old.status = 'scheduled' then
+  if public.can_access_order(old)
+    and new.status = 'in_progress'
+    and old.status = 'scheduled' then
     return new;
   end if;
 
-  if old.assigned_employee_id = auth.uid() and new.status = 'completed_pending_invoice' and old.status in ('scheduled', 'in_progress', 'completed_pending_invoice') then
-    new.completed_at = coalesce(new.completed_at, now());
-    new.completed_by = coalesce(new.completed_by, auth.uid());
-    return new;
-  end if;
-
-  raise exception 'Ansatte kan bare starte eller ferdigmelde egne planlagte ordre.';
+  raise exception 'Ansatte kan bare starte egne planlagte ordre. Ferdigmelding gjøres per deltaker.';
 end;
 $$;
 create trigger enforce_order_flow_update_trigger before update on public.orders for each row execute function public.enforce_order_flow_update();
 
+create or replace function public.enforce_order_participant_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if current_user in ('postgres', 'service_role', 'supabase_admin') then
+    return new;
+  end if;
+
+  if public.is_admin() then
+    return new;
+  end if;
+
+  if old.user_id = auth.uid()
+    and new.user_id = old.user_id
+    and new.order_id = old.order_id
+    and new.id = old.id
+    and new.created_at = old.created_at then
+    return new;
+  end if;
+
+  raise exception 'Deltakere kan bare endre egen ferdigstatus.';
+end;
+$$;
+create trigger enforce_order_participant_update_trigger before update on public.order_participants for each row execute function public.enforce_order_participant_update();
+
+create or replace function public.complete_order_when_all_participants_done()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.finished_at is not null
+    and exists (select 1 from public.order_participants where order_id = new.order_id)
+    and not exists (select 1 from public.order_participants where order_id = new.order_id and finished_at is null) then
+    update public.orders
+    set status = 'completed_pending_invoice',
+        completed_at = coalesce(completed_at, now()),
+        completed_by = coalesce(completed_by, auth.uid())
+    where id = new.order_id
+      and status <> 'invoiced_archived';
+  end if;
+
+  return new;
+end;
+$$;
+create trigger complete_order_when_all_participants_done_trigger after update of finished_at on public.order_participants for each row execute function public.complete_order_when_all_participants_done();
+
 alter table public.profiles enable row level security;
 alter table public.orders enable row level security;
+alter table public.order_participants enable row level security;
 alter table public.time_entries enable row level security;
 
 create policy "Profiles: users see themselves, admins see all" on public.profiles for select using (id = auth.uid() or public.is_admin());
@@ -151,6 +226,9 @@ create policy "Orders: admins see all, employees see assigned" on public.orders 
 create policy "Orders: admins create" on public.orders for insert with check (public.is_admin());
 create policy "Orders: admins update all, employees update assigned" on public.orders for update using (public.can_access_order(orders)) with check (public.can_access_order(orders));
 create policy "Orders: admins delete" on public.orders for delete using (public.is_admin());
+create policy "Order participants: admins see all, participants see order" on public.order_participants for select using (public.is_admin() or user_id = auth.uid() or exists (select 1 from public.orders o where o.id = order_id and public.can_access_order(o)));
+create policy "Order participants: admins manage" on public.order_participants for all using (public.is_admin()) with check (public.is_admin());
+create policy "Order participants: participants update own finish" on public.order_participants for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "Time entries: admins see all, employees see own" on public.time_entries for select using (public.is_admin() or employee_id = auth.uid());
 create policy "Time entries: employees create own entries on accessible orders" on public.time_entries for insert with check (employee_id = auth.uid() and exists (select 1 from public.orders o where o.id = order_id and public.can_access_order(o)));
 create policy "Time entries: employees edit unapproved own entries, admins edit all" on public.time_entries for update using (public.is_admin() or (employee_id = auth.uid() and approved = false)) with check (public.is_admin() or (employee_id = auth.uid() and approved = false));
