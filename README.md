@@ -40,6 +40,18 @@ Flyt:
 - Admin kan trykke `Marker som fakturert`.
 - Fakturerte ordre ligger i `Arkiv` og vises ikke i aktiv kalender.
 
+## Planlegging
+
+Adminfanen `Planlegging` har nå:
+
+- Venstre side med ordre som har status `planning`.
+- Knapp `Planlegg` på hver ordre.
+- Skjema for ansatt, dato, starttid og estimert varighet.
+- Høyre side med ukeplan per ansatt.
+- Når en ordre planlegges, får den status `scheduled`, forsvinner fra `Til planlegging` og vises i kalender/ukeplan.
+
+Det er ikke lagt til drag-and-drop i denne MVP-runden. Datamodellen bruker `scheduled_start`, `scheduled_end` og `assigned_employee_id`, så drag-and-drop kan bygges på senere uten ny hovedstruktur.
+
 ## Timeføring
 
 Ansatt kan velge metode per timeføring:
@@ -59,6 +71,7 @@ CSV-eksporten inneholder kolonnen `metode`, slik at man ser om føringen er gjor
 ## MVP
 
 - Admin oppretter ordre og tildeler ansatt.
+- Admin planlegger ordre i egen planleggingsfane.
 - Ansatt ser egne ordre i oversikt og kalender.
 - Ansatt fører timer med klokkeslett eller manuelt timeantall.
 - Admin godkjenner timer og eksporterer CSV.
@@ -107,6 +120,17 @@ alter table public.time_entries add constraint time_entries_method_time_check ch
 create index if not exists time_entries_entry_method_idx on public.time_entries(entry_method);
 ```
 
+## Oppgave 3-migrering
+
+Ingen ny SQL kreves. Oppgave 3 bruker eksisterende felter:
+
+- `orders.assigned_employee_id`
+- `orders.order_date`
+- `orders.scheduled_start`
+- `orders.scheduled_end`
+- `orders.estimated_hours`
+- `orders.status`
+
 ## Test Oppgave 2
 
 1. Logg inn som ansatt.
@@ -117,3 +141,15 @@ create index if not exists time_entries_entry_method_idx on public.time_entries(
 6. Prøv 0, negativt tall og over 24 timer. Appen skal stoppe lagring.
 7. Lagre en gyldig manuell føring.
 8. Logg inn som admin og eksporter CSV. Kontroller at `metode` er med, og at manuelle føringer har tom start/slutt.
+
+## Test Oppgave 3
+
+1. Logg inn som admin.
+2. Opprett en ordre uten ansatt og dato.
+3. Gå til `Planlegging`.
+4. Trykk `Planlegg` på ordren.
+5. Velg ansatt, dato, starttid og estimert varighet.
+6. Lagre planleggingen.
+7. Kontroller at ordren forsvinner fra `Til planlegging`.
+8. Kontroller at ordren vises i ukeplanen på valgt ansatt og dag.
+9. Gå til `Kalender` og kontroller at ordren også vises der.
