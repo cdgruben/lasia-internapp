@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 
 type FeedOrder = {
+  schedule_entry_id: string;
   id: string;
   order_number: string;
   customer_name: string;
@@ -22,11 +23,7 @@ const statusLabels: Record<FeedOrder["status"], string> = {
 };
 
 function escapeIcs(value: string) {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,")
-    .replace(/\r?\n/g, "\\n");
+  return value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 }
 
 function formatIcsDate(value: string) {
@@ -53,15 +50,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { token: rawToken } = await params;
   const token = rawToken.replace(/\.ics$/i, "");
 
-  if (!token || token.length < 24) {
-    return new Response("Ugyldig kalender-token", { status: 404 });
-  }
+  if (!token || token.length < 24) return new Response("Ugyldig kalender-token", { status: 404 });
 
   const { data, error } = await supabase.rpc("get_calendar_feed_orders", { feed_token: token });
-
-  if (error) {
-    return new Response("Kunne ikke hente kalenderfeed", { status: 500 });
-  }
+  if (error) return new Response("Kunne ikke hente kalenderfeed", { status: 500 });
 
   const origin = new URL(request.url).origin;
   const now = formatIcsDate(new Date().toISOString());
@@ -76,7 +68,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return [
       "BEGIN:VEVENT",
-      icsLine("UID", `${order.id}@lasia-internapp`),
+      icsLine("UID", `${order.schedule_entry_id}@lasia-internapp`),
       icsLine("DTSTAMP", now),
       icsLine("DTSTART", formatIcsDate(order.scheduled_start)),
       icsLine("DTEND", formatIcsDate(order.scheduled_end)),
