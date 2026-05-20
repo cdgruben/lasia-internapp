@@ -1,243 +1,194 @@
-# Låsia AS internapp
+# Lasia AS internapp
 
-MVP for ordre, kalender, timeføring og CSV-eksport for Låsia AS.
+MVP for ordre, kalender, timeforing og CSV-eksport for Lasia AS.
+
+Produksjon: https://lasia-internapp.vercel.app/
 
 ## Oppsett
 
-1. Kjør SQL i `supabase/schema.sql` i Supabase for ny database.
-2. For eksisterende database: kjør migrasjonene nevnt under `Oppgave 1-migrering`, `Oppgave 2-migrering` og `Oppgave 6-migrering`.
-3. Legg miljøvariabler i Vercel:
+1. Opprett Supabase-prosjekt.
+2. Kjor `supabase/schema.sql` i SQL Editor for ny database.
+3. For eksisterende database: kjor migrasjonene under `Migreringer` i denne README-en.
+4. Legg miljovariabler i Vercel:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://ypaucjulcfutkwrlhyfs.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=din_anon_key
 ```
 
-4. Opprett første bruker i Supabase Auth og sett den til admin:
+5. Opprett forste bruker i Supabase Auth og sett den til admin:
 
 ```sql
 update public.profiles set role = 'admin' where email = 'din-admin@lasia.no';
 ```
 
-## Ordreflyt
+## Hovedflyt
 
-Ordrestatusene er nå:
+Ordrestatusene er:
 
 1. `planning` - Til planlegging
 2. `scheduled` - Planlagt
-3. `in_progress` - Pågår
+3. `in_progress` - Pagar
 4. `completed_pending_invoice` - Ferdig - til fakturering
 5. `invoiced_archived` - Fakturert / arkiv
 
 Flyt:
 
-- Admin kan opprette ordre uten dato og ansatt. Den havner i `Til planlegging`.
-- Admin kan planlegge ordre med ansatt, dato, starttid og estimert varighet.
-- Planlagt ordre vises i kalenderen til valgt ansatt.
-- Ansatt kan sette ordre til `Pågår`.
-- Ansatt kan føre timer og huke av `Marker ordre som ferdig`.
-- Ferdigmeldte ordre vises i adminfanen `Til fakturering`.
-- Admin kan trykke `Marker som fakturert`.
+- Admin oppretter ordre.
+- Ordre uten dato/deltakere ligger under `Til planlegging`.
+- Admin planlegger ordre med dato, tid og en eller flere deltakere.
+- Ordren vises i kalenderen til alle deltakere.
+- Hver deltaker kan fore egne timer og huke av `Min del er ferdig`.
+- Ordren flyttes forst til `Ferdig - til fakturering` nar alle deltakere er ferdige.
+- Admin kan overstyre ferdigstatus per deltaker.
+- Admin kan markere ordre som fakturert.
 - Fakturerte ordre ligger i `Arkiv` og vises ikke i aktiv kalender.
 
-## Planlegging
+## Kalender
 
-Adminfanen `Planlegging` har nå:
+Kalenderen har:
 
-- Venstre side med ordre som har status `planning`.
-- Knapp `Planlegg` på hver ordre.
-- Skjema for ansatt, dato, starttid og estimert varighet.
-- Høyre side med ukeplan per ansatt.
-- Når en ordre planlegges, får den status `scheduled`, forsvinner fra `Til planlegging` og vises i kalender/ukeplan.
+- Knappene `Forrige uke`, `Denne uken` og `Neste uke`.
+- Norsk ukevisning med mandag som forste ukedag.
+- Norsk datoformat og norske ukedager.
+- Standardvisning mandag-fredag.
+- Valg mellom `Vis arbeidsuke` og `Vis hele uken`.
+- Norske helligdager/fridager markert direkte i kalenderen.
+- Klikk pa ordre apner detaljvisning.
 
-Det er ikke lagt til drag-and-drop i denne MVP-runden. Datamodellen bruker `scheduled_start`, `scheduled_end` og `assigned_employee_id`, så drag-and-drop kan bygges på senere uten ny hovedstruktur.
+Helligdager beregnes i appen med en enkel hjelpefunksjon, uten ekstern pakke.
 
-## Adminmeny
+## Ordredetaljer
 
-Adminnavigasjonen er nå ryddet til disse hovedpunktene:
+Detaljvisningen viser:
 
-- Dashboard
-- Ordre
-- Planlegging
-- Til fakturering
-- Arkiv
-- Timer/eksport
+- Ordrenummer
+- Kunde
+- Adresse
+- Kontaktperson
+- Telefon
+- Beskrivelse
+- Intern kommentar
+- Status
+- Planlagt start/slutt
+- Tildelte deltakere
+- Timeforinger
+- Ferdigstatus per deltaker
+- Fakturert/arkivstatus nar relevant
 
-Ansattvisningen beholder egen `Kalender`, siden ansatte fortsatt trenger dag-/ukevisning for egne jobber.
+Samme detaljvisning brukes ogsa for ordre i arkiv.
 
-## Timeføring
+## Timeforing
 
-Ansatt kan velge metode per timeføring:
+Ansatt kan velge metode per timeforing:
 
 1. `time_range` - Fra-til klokkeslett. Starttid og sluttid lagres, og timer beregnes automatisk.
 2. `manual` - Manuelt antall timer. Starttid og sluttid er tomme, kun timer lagres.
 
 Validering:
 
-- Sluttid må være etter starttid ved fra-til.
-- Timer må være større enn 0.
-- Maks 24 timer per føring.
+- Sluttid ma vare etter starttid ved fra-til.
+- Timer ma vare storre enn 0.
+- Maks 24 timer per foring.
 - Kommentar og arbeidstype er beholdt.
 
-CSV-eksporten inneholder kolonnen `metode`, slik at man ser om føringen er gjort med klokkeslett eller manuelt.
+CSV-eksporten inneholder kolonnen `metode`, slik at man ser om foringen er gjort med klokkeslett eller manuelt.
+
+## Adminmeny
+
+Adminnavigasjonen viser:
+
+- Dashboard
+- Ordre
+- Min kalender
+- Planlegging
+- Til fakturering
+- Arkiv
+- Timer
+
+Admin regnes ogsa som ansatt og kan derfor ha egne ordre, egen kalender, egne timer og egen ferdigstatus.
 
 ## Sikkerhet
 
 Supabase Auth og RLS brukes som sikkerhetslag.
 
-- Admin ser alle ordre, ansatte og timeføringer.
-- Ansatt ser kun egne tildelte ordre.
-- Ansatt ser kun egne timeføringer.
-- Ansatt kan føre timer på egne tilgjengelige ordre.
-- Ansatt kan starte eller ferdigmelde egne planlagte ordre.
-- Kun admin kan markere ordre som fakturert/arkivert.
+- Admin ser alle ordre, deltakere og timeforinger.
+- Deltakere ser ordre de er deltaker pa.
+- Deltakere kan fore egne timer pa ordre de har tilgang til.
+- Deltakere kan markere egen del ferdig.
+- Kun admin kan fakturere/arkivere.
 - Nye Auth-brukere opprettes alltid som `employee`.
 - Ansatte kan ikke endre egen rolle til `admin`.
 
-Rolleendringer stoppes av database-triggeren `enforce_profile_role_update_trigger`, ikke bare av frontend.
+## Migreringer
 
-## Databaseskjema
+### Flere deltakere og ferdigflyt
 
-Supabase-skjemaet er verifisert for oppgave 5.
-
-Ordre støtter:
-
-- `planning`
-- `scheduled`
-- `in_progress`
-- `completed_pending_invoice`
-- `invoiced_archived`
-- `scheduled_start`
-- `scheduled_end`
-- `completed_at`
-- `completed_by`
-- `invoiced_at`
-- `invoiced_by`
-
-Timeføring støtter:
-
-- `entry_method` med `time_range` og `manual`
-- `start_time` som kan være tom ved manuell føring
-- `end_time` som kan være tom ved manuell føring
-- `hours` med validering større enn 0 og maks 24
-
-`supabase/schema.sql` er oppdatert for ny database. Eksisterende Supabase-prosjekt er migrert gjennom oppgave 1, 2 og 6.
-
-## Verifisering
-
-Oppgave 7 er verifisert mot produksjonsbygget i Vercel.
-
-- `npm run build` ble kjørt av Vercel på commit `be1f513`.
-- Next.js kompilerte uten feil.
-- Type-/lint-sjekk i Next build passerte.
-- Produksjons-URL svarer `200 OK`.
-- Supabase-migrasjonene er registrert, inkludert `security_harden_profile_roles`.
-- `npm run lint` finnes ikke som eget script i GitHub-versjonen av `package.json`.
-
-## MVP
-
-- Admin oppretter ordre og tildeler ansatt.
-- Admin planlegger ordre i egen planleggingsfane.
-- Ansatt ser egne ordre i oversikt og kalender.
-- Ansatt fører timer med klokkeslett eller manuelt timeantall.
-- Admin godkjenner timer og eksporterer CSV.
-- Tripletex integreres senere via `orders.tripletex_id` og CSV/serverside API.
-
-## Oppgave 1-migrering
-
-Disse endringene er kjørt i Supabase-prosjektet:
+Denne migreringen er kjort i Supabase-prosjektet. Den bevarer gamle ordre ved a kopiere `assigned_employee_id` inn i `order_participants`.
 
 ```sql
-alter type public.order_status add value if not exists 'planning';
-alter type public.order_status add value if not exists 'scheduled';
-alter type public.order_status add value if not exists 'in_progress';
-alter type public.order_status add value if not exists 'completed_pending_invoice';
-alter type public.order_status add value if not exists 'invoiced_archived';
-
-alter table public.orders alter column order_date drop not null;
-alter table public.orders add column if not exists scheduled_start timestamptz;
-alter table public.orders add column if not exists scheduled_end timestamptz;
-alter table public.orders add column if not exists completed_at timestamptz;
-alter table public.orders add column if not exists completed_by uuid references public.profiles(id) on delete set null;
-alter table public.orders add column if not exists invoiced_at timestamptz;
-alter table public.orders add column if not exists invoiced_by uuid references public.profiles(id) on delete set null;
-```
-
-## Oppgave 2-migrering
-
-Disse endringene er kjørt i Supabase-prosjektet:
-
-```sql
-create type public.time_entry_method as enum ('time_range', 'manual');
-
-alter table public.time_entries add column if not exists entry_method public.time_entry_method not null default 'time_range';
-alter table public.time_entries alter column start_time drop not null;
-alter table public.time_entries alter column end_time drop not null;
-
-alter table public.time_entries drop constraint if exists time_entries_hours_check;
-alter table public.time_entries add constraint time_entries_hours_check check (hours > 0 and hours <= 24);
-
-alter table public.time_entries add constraint time_entries_method_time_check check (
-  (entry_method = 'time_range' and start_time is not null and end_time is not null and end_time > start_time)
-  or
-  (entry_method = 'manual')
+create table if not exists public.order_participants (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  finished_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (order_id, user_id)
 );
 
-create index if not exists time_entries_entry_method_idx on public.time_entries(entry_method);
-```
+create index if not exists order_participants_order_id_idx on public.order_participants(order_id);
+create index if not exists order_participants_user_id_idx on public.order_participants(user_id);
+create index if not exists order_participants_finished_at_idx on public.order_participants(finished_at);
 
-## Oppgave 3-migrering
+insert into public.order_participants (order_id, user_id)
+select id, assigned_employee_id
+from public.orders
+where assigned_employee_id is not null
+on conflict (order_id, user_id) do nothing;
 
-Ingen ny SQL kreves. Oppgave 3 bruker eksisterende felter:
+create or replace function public.is_order_participant(p_order_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1
+    from public.order_participants op
+    where op.order_id = p_order_id
+      and op.user_id = auth.uid()
+  );
+$$;
 
-- `orders.assigned_employee_id`
-- `orders.order_date`
-- `orders.scheduled_start`
-- `orders.scheduled_end`
-- `orders.estimated_hours`
-- `orders.status`
+create or replace function public.can_access_order(order_row public.orders)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.is_admin()
+    or order_row.assigned_employee_id = auth.uid()
+    or public.is_order_participant(order_row.id);
+$$;
 
-## Oppgave 4-migrering
-
-Ingen ny SQL kreves. Oppgave 4 endrer kun adminnavigasjonen.
-
-## Oppgave 5-migrering
-
-Ingen ny SQL ble kjørt. Databasen ble kontrollert mot kravene, og alle nødvendige felter finnes allerede fra oppgave 1 og 2.
-
-Verifisert i Supabase:
-
-- `orders.status` støtter de nye statusene.
-- `orders` har `scheduled_start`, `scheduled_end`, `completed_at`, `completed_by`, `invoiced_at` og `invoiced_by`.
-- `time_entries.entry_method` støtter `time_range` og `manual`.
-- `time_entries.start_time` og `time_entries.end_time` kan være tomme.
-- `time_entries.hours` er påkrevd og har maksgrense 24.
-
-## Oppgave 6-migrering
-
-Denne migreringen er kjørt i Supabase-prosjektet:
-
-```sql
-create or replace function public.handle_new_user()
+create or replace function public.enforce_order_flow_update()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.profiles (id, full_name, email, role, phone)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
-    new.email,
-    'employee'::public.user_role,
-    new.raw_user_meta_data->>'phone'
-  )
-  on conflict (id) do update set
-    full_name = excluded.full_name,
-    email = excluded.email,
-    phone = excluded.phone;
-  return new;
+  if current_user in ('postgres', 'service_role', 'supabase_admin') then
+    return new;
+  end if;
+
+  if public.is_admin() then
+    if new.status = 'invoiced_archived' and old.status is distinct from 'invoiced_archived' then
+      new.invoiced_at = coalesce(new.invoiced_at, now());
+      new.invoiced_by = coalesce(new.invoiced_by, auth.uid());
+    end if;
+    return new;
+  end if;
+
+  if public.can_access_order(old)
+    and new.status = 'in_progress'
+    and old.status = 'scheduled' then
+    return new;
+  end if;
+
+  raise exception 'Ansatte kan bare starte egne planlagte ordre. Ferdigmelding gjores per deltaker.';
 end;
 $$;
 
-create or replace function public.enforce_profile_role_update()
+create or replace function public.enforce_order_participant_update()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if current_user in ('postgres', 'service_role', 'supabase_admin') then
@@ -248,82 +199,119 @@ begin
     return new;
   end if;
 
-  if new.role is distinct from old.role then
-    raise exception 'Kun admin kan endre brukerrolle.';
+  if old.user_id = auth.uid()
+    and new.user_id = old.user_id
+    and new.order_id = old.order_id
+    and new.id = old.id
+    and new.created_at = old.created_at then
+    return new;
+  end if;
+
+  raise exception 'Deltakere kan bare endre egen ferdigstatus.';
+end;
+$$;
+
+drop trigger if exists enforce_order_participant_update_trigger on public.order_participants;
+create trigger enforce_order_participant_update_trigger
+before update on public.order_participants
+for each row execute function public.enforce_order_participant_update();
+
+create or replace function public.complete_order_when_all_participants_done()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.finished_at is not null
+    and exists (select 1 from public.order_participants where order_id = new.order_id)
+    and not exists (select 1 from public.order_participants where order_id = new.order_id and finished_at is null) then
+    update public.orders
+    set status = 'completed_pending_invoice',
+        completed_at = coalesce(completed_at, now()),
+        completed_by = coalesce(completed_by, auth.uid())
+    where id = new.order_id
+      and status <> 'invoiced_archived';
   end if;
 
   return new;
 end;
 $$;
 
-drop trigger if exists enforce_profile_role_update_trigger on public.profiles;
-create trigger enforce_profile_role_update_trigger
-before update on public.profiles
-for each row execute function public.enforce_profile_role_update();
+drop trigger if exists complete_order_when_all_participants_done_trigger on public.order_participants;
+create trigger complete_order_when_all_participants_done_trigger
+ after update of finished_at on public.order_participants
+ for each row execute function public.complete_order_when_all_participants_done();
+
+alter table public.order_participants enable row level security;
+
+drop policy if exists "Order participants: admins see all, participants see order" on public.order_participants;
+drop policy if exists "Order participants: admins manage" on public.order_participants;
+drop policy if exists "Order participants: participants update own finish" on public.order_participants;
+
+create policy "Order participants: admins see all, participants see order" on public.order_participants
+for select using (
+  public.is_admin()
+  or user_id = auth.uid()
+  or exists (select 1 from public.orders o where o.id = order_id and public.can_access_order(o))
+);
+
+create policy "Order participants: admins manage" on public.order_participants
+for all using (public.is_admin()) with check (public.is_admin());
+
+create policy "Order participants: participants update own finish" on public.order_participants
+for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 ```
 
-## Oppgave 7-verifisering
+## Endrede filer
 
-Denne runden ble verifisert etter oppgave 1-6:
+- `app/page.tsx` - kalendernavigasjon, helligdager, ordredetaljer, flere deltakere, admin som ansatt, ferdigstatus per deltaker og menyendring fra `Timer/eksport` til `Timer`.
+- `supabase/schema.sql` - oppdatert fullskjema med `order_participants`, triggere, funksjoner og RLS.
+- `README.md` - oppdatert oppsett, migrering og teststeg.
 
-- Vercel deployment: `READY`.
-- Produksjon: `https://lasia-internapp.vercel.app/` svarer `200 OK`.
-- Vercel build-logg viser `npm run build`, `Compiled successfully`, type-/lint-sjekk og `Deployment completed`.
-- Supabase-migrasjoner er kontrollert.
-- Brukertest bekreftet at kalenderen fungerer etter endringene.
-- Brukertest bekreftet at RLS/endret sikkerhet ikke ødela appflyten.
+## Verifisering
 
-## Test Oppgave 2
+Vercel har bygget commit `f9c9cf1` med appendringene:
 
-1. Logg inn som ansatt.
-2. Åpne en planlagt ordre og gå til timeføring.
-3. Velg `Fra-til klokkeslett`, sett start og slutt, og kontroller at timer beregnes automatisk.
-4. Prøv sluttid før starttid og sjekk at appen stopper lagring.
-5. Velg `Manuelt antall timer` og sjekk at kun timefeltet vises.
-6. Prøv 0, negativt tall og over 24 timer. Appen skal stoppe lagring.
-7. Lagre en gyldig manuell føring.
-8. Logg inn som admin og eksporter CSV. Kontroller at `metode` er med, og at manuelle føringer har tom start/slutt.
+- `npm run build` ble kjort av Vercel.
+- Next.js kompilerte uten feil.
+- Type-/lint-sjekken i Next build passerte.
+- Deployment ble fullfort.
 
-## Test Oppgave 3
+`npm run lint` finnes ikke som eget script i GitHub-versjonen av `package.json`.
 
-1. Logg inn som admin.
-2. Opprett en ordre uten ansatt og dato.
-3. Gå til `Planlegging`.
-4. Trykk `Planlegg` på ordren.
-5. Velg ansatt, dato, starttid og estimert varighet.
-6. Lagre planleggingen.
-7. Kontroller at ordren forsvinner fra `Til planlegging`.
-8. Kontroller at ordren vises i ukeplanen på valgt ansatt og dag.
-9. Gå til `Kalender` og kontroller at ordren også vises der.
+## Slik tester du
 
-## Test Oppgave 4
+### Kalender
+
+1. Logg inn som admin eller ansatt.
+2. Apne `Min kalender` eller ansattens `Kalender`.
+3. Trykk `Forrige uke`, `Denne uken` og `Neste uke`.
+4. Kontroller at uken starter pa mandag.
+5. Bytt mellom `Vis arbeidsuke` og `Vis hele uken`.
+6. Kontroller at norske helligdager/fridager vises i kalenderen.
+7. Trykk pa en ordre og kontroller at detaljvisningen apnes.
+
+### Flere deltakere
 
 1. Logg inn som admin.
-2. Kontroller at menyen viser: `Dashboard`, `Ordre`, `Planlegging`, `Til fakturering`, `Arkiv`, `Timer/eksport`.
-3. Kontroller at `Kalender` ikke vises som egen adminfane.
-4. Logg inn som ansatt.
-5. Kontroller at ansatt fortsatt har kalender for egne jobber.
+2. Opprett eller rediger en ordre.
+3. Velg flere deltakere i deltakerlisten.
+4. Planlegg ordren med dato og tid.
+5. Logg inn som hver deltaker og kontroller at ordren vises i kalenderen.
+6. Kontroller at admin ogsa kan legges til som deltaker og se ordren i egen kalender.
 
-## Test Oppgave 5
+### Ferdigflyt
 
-1. Åpne Supabase Table Editor.
-2. Sjekk at `orders` har feltene `scheduled_start`, `scheduled_end`, `completed_at`, `completed_by`, `invoiced_at` og `invoiced_by`.
-3. Sjekk at `time_entries` har `entry_method`, nullable `start_time`, nullable `end_time` og `hours`.
-4. Sjekk at appen fortsatt kan opprette ordre, planlegge ordre, føre timer og eksportere CSV.
+1. Logg inn som forste deltaker.
+2. For timer pa ordren og huk av `Min del er ferdig`.
+3. Kontroller at ordren ikke gar til `Ferdig - til fakturering` hvis andre deltakere ikke er ferdige.
+4. Logg inn som siste deltaker.
+5. For timer og huk av `Min del er ferdig`.
+6. Kontroller at ordren flyttes til `Til fakturering`.
+7. Logg inn som admin og marker ordren som fakturert.
+8. Apne `Arkiv`, finn ordren og apne detaljvisningen.
 
-## Test Oppgave 6
+### Timer og CSV
 
-1. Logg inn som admin og kontroller at du fortsatt ser alle ordre og timer.
-2. Logg inn som ansatt og kontroller at du kun ser egne ordre og egne timer.
-3. Som ansatt: før timer på egen ordre og marker ordre ferdig. Ordren skal gå til `Ferdig - til fakturering`.
-4. Som admin: marker samme ordre som fakturert. Den skal flyttes til `Arkiv`.
-5. Kontroller i Supabase at nye Auth-brukere får rollen `employee` som standard.
-6. Ikke gi ansatte direkte tilgang til Supabase Table Editor. RLS beskytter API-et, men Table Editor skal kun brukes av administratorer.
-
-## Test Oppgave 7
-
-1. Åpne produksjonsappen.
-2. Logg inn som admin og sjekk dashboard, ordre, planlegging, til fakturering, arkiv og timer/eksport.
-3. Logg inn som ansatt og sjekk dagens jobber, ukens jobber, kalender og timeføring.
-4. Opprett en ordre uten dato/ansatt, planlegg den, før timer, marker ferdig og marker fakturert som admin.
-5. Eksporter CSV og kontroller at kolonnene er med, inkludert `metode`.
+1. For timer med `Fra-til klokkeslett` og kontroller at timer beregnes automatisk.
+2. For timer med `Manuelt antall timer` og kontroller at start/slutt ikke kreves.
+3. Logg inn som admin.
+4. Apne `Timer` og eksporter CSV.
+5. Kontroller at eksporten fortsatt inneholder timeforingene og kolonnen `metode`.
