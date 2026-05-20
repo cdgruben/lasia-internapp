@@ -3,6 +3,7 @@ create extension if not exists pgcrypto;
 create type public.user_role as enum ('admin', 'employee');
 create type public.order_status as enum ('planning', 'scheduled', 'in_progress', 'completed_pending_invoice', 'invoiced_archived');
 create type public.work_type as enum ('ordinaer', 'reise', 'overtid', 'materiellhenting', 'dokumentasjon');
+create type public.time_entry_method as enum ('time_range', 'manual');
 
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -44,16 +45,22 @@ create table public.time_entries (
   order_id uuid not null references public.orders(id) on delete cascade,
   employee_id uuid not null references public.profiles(id) on delete cascade,
   entry_date date not null,
-  start_time time not null,
-  end_time time not null,
-  hours numeric(6,2) not null check (hours >= 0),
+  entry_method public.time_entry_method not null default 'time_range',
+  start_time time,
+  end_time time,
+  hours numeric(6,2) not null check (hours > 0 and hours <= 24),
   comment text,
   work_type public.work_type not null default 'ordinaer',
   approved boolean not null default false,
   approved_by uuid references public.profiles(id) on delete set null,
   approved_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint time_entries_method_time_check check (
+    (entry_method = 'time_range' and start_time is not null and end_time is not null and end_time > start_time)
+    or
+    (entry_method = 'manual')
+  )
 );
 
 create index orders_assigned_employee_id_idx on public.orders(assigned_employee_id);
@@ -65,6 +72,7 @@ create index time_entries_employee_id_idx on public.time_entries(employee_id);
 create index time_entries_order_id_idx on public.time_entries(order_id);
 create index time_entries_entry_date_idx on public.time_entries(entry_date);
 create index time_entries_approved_idx on public.time_entries(approved);
+create index time_entries_entry_method_idx on public.time_entries(entry_method);
 
 create or replace function public.touch_updated_at()
 returns trigger language plpgsql as $$ begin new.updated_at = now(); return new; end; $$;
@@ -128,5 +136,5 @@ create policy "Time entries: employees create own entries on accessible orders" 
 create policy "Time entries: employees edit unapproved own entries, admins edit all" on public.time_entries for update using (public.is_admin() or (employee_id = auth.uid() and approved = false)) with check (public.is_admin() or (employee_id = auth.uid() and approved = false));
 create policy "Time entries: admins delete" on public.time_entries for delete using (public.is_admin());
 
-create or replace view public.tripletex_time_export as select te.entry_date, p.full_name as employee_name, p.email as employee_email, o.order_number, o.customer_name, o.tripletex_id, te.start_time, te.end_time, te.hours, te.work_type, te.comment, te.approved from public.time_entries te join public.profiles p on p.id = te.employee_id join public.orders o on o.id = te.order_id;
+create or replace view public.tripletex_time_export as select te.entry_date, p.full_name as employee_name, p.email as employee_email, o.order_number, o.customer_name, o.tripletex_id, te.entry_method, te.start_time, te.end_time, te.hours, te.work_type, te.comment, te.approved from public.time_entries te join public.profiles p on p.id = te.employee_id join public.orders o on o.id = te.order_id;
 comment on column public.orders.tripletex_id is 'Reserved for future Tripletex order/project/customer mapping.';
