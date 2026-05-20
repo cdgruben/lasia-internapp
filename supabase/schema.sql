@@ -84,8 +84,8 @@ create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   insert into public.profiles (id, full_name, email, role, phone)
-  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), new.email, coalesce((new.raw_user_meta_data->>'role')::public.user_role, 'employee'), new.raw_user_meta_data->>'phone')
-  on conflict (id) do update set full_name = excluded.full_name, email = excluded.email, role = excluded.role, phone = excluded.phone;
+  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), new.email, 'employee'::public.user_role, new.raw_user_meta_data->>'phone')
+  on conflict (id) do update set full_name = excluded.full_name, email = excluded.email, phone = excluded.phone;
   return new;
 end;
 $$;
@@ -93,6 +93,26 @@ create trigger on_auth_user_created after insert on auth.users for each row exec
 
 create or replace function public.is_admin() returns boolean language sql stable security definer set search_path = public as $$ select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'); $$;
 create or replace function public.can_access_order(order_row public.orders) returns boolean language sql stable security definer set search_path = public as $$ select public.is_admin() or order_row.assigned_employee_id = auth.uid(); $$;
+
+create or replace function public.enforce_profile_role_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if current_user in ('postgres', 'service_role', 'supabase_admin') then
+    return new;
+  end if;
+
+  if public.is_admin() then
+    return new;
+  end if;
+
+  if new.role is distinct from old.role then
+    raise exception 'Kun admin kan endre brukerrolle.';
+  end if;
+
+  return new;
+end;
+$$;
+create trigger enforce_profile_role_update_trigger before update on public.profiles for each row execute function public.enforce_profile_role_update();
 
 create or replace function public.enforce_order_flow_update()
 returns trigger language plpgsql security definer set search_path = public as $$
