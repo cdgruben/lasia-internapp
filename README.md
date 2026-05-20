@@ -5,7 +5,7 @@ MVP for ordre, kalender, timeføring og CSV-eksport for Låsia AS.
 ## Oppsett
 
 1. Kjør SQL i `supabase/schema.sql` i Supabase for ny database.
-2. For eksisterende database: kjør migrasjonene nevnt under `Oppgave 1-migrering` og `Oppgave 2-migrering`.
+2. For eksisterende database: kjør migrasjonene nevnt under `Oppgave 1-migrering`, `Oppgave 2-migrering` og `Oppgave 6-migrering`.
 3. Legg miljøvariabler i Vercel:
 
 ```bash
@@ -81,6 +81,21 @@ Validering:
 
 CSV-eksporten inneholder kolonnen `metode`, slik at man ser om føringen er gjort med klokkeslett eller manuelt.
 
+## Sikkerhet
+
+Supabase Auth og RLS brukes som sikkerhetslag.
+
+- Admin ser alle ordre, ansatte og timeføringer.
+- Ansatt ser kun egne tildelte ordre.
+- Ansatt ser kun egne timeføringer.
+- Ansatt kan føre timer på egne tilgjengelige ordre.
+- Ansatt kan starte eller ferdigmelde egne planlagte ordre.
+- Kun admin kan markere ordre som fakturert/arkivert.
+- Nye Auth-brukere opprettes alltid som `employee`.
+- Ansatte kan ikke endre egen rolle til `admin`.
+
+Rolleendringer stoppes av database-triggeren `enforce_profile_role_update_trigger`, ikke bare av frontend.
+
 ## Databaseskjema
 
 Supabase-skjemaet er verifisert for oppgave 5.
@@ -106,7 +121,7 @@ Timeføring støtter:
 - `end_time` som kan være tom ved manuell føring
 - `hours` med validering større enn 0 og maks 24
 
-`supabase/schema.sql` er oppdatert for ny database. Eksisterende Supabase-prosjekt er allerede migrert gjennom oppgave 1 og 2.
+`supabase/schema.sql` er oppdatert for ny database. Eksisterende Supabase-prosjekt er migrert gjennom oppgave 1, 2 og 6.
 
 ## MVP
 
@@ -187,6 +202,55 @@ Verifisert i Supabase:
 - `time_entries.start_time` og `time_entries.end_time` kan være tomme.
 - `time_entries.hours` er påkrevd og har maksgrense 24.
 
+## Oppgave 6-migrering
+
+Denne migreringen er kjørt i Supabase-prosjektet:
+
+```sql
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, full_name, email, role, phone)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    new.email,
+    'employee'::public.user_role,
+    new.raw_user_meta_data->>'phone'
+  )
+  on conflict (id) do update set
+    full_name = excluded.full_name,
+    email = excluded.email,
+    phone = excluded.phone;
+  return new;
+end;
+$$;
+
+create or replace function public.enforce_profile_role_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if current_user in ('postgres', 'service_role', 'supabase_admin') then
+    return new;
+  end if;
+
+  if public.is_admin() then
+    return new;
+  end if;
+
+  if new.role is distinct from old.role then
+    raise exception 'Kun admin kan endre brukerrolle.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_profile_role_update_trigger on public.profiles;
+create trigger enforce_profile_role_update_trigger
+before update on public.profiles
+for each row execute function public.enforce_profile_role_update();
+```
+
 ## Test Oppgave 2
 
 1. Logg inn som ansatt.
@@ -224,3 +288,12 @@ Verifisert i Supabase:
 2. Sjekk at `orders` har feltene `scheduled_start`, `scheduled_end`, `completed_at`, `completed_by`, `invoiced_at` og `invoiced_by`.
 3. Sjekk at `time_entries` har `entry_method`, nullable `start_time`, nullable `end_time` og `hours`.
 4. Sjekk at appen fortsatt kan opprette ordre, planlegge ordre, føre timer og eksportere CSV.
+
+## Test Oppgave 6
+
+1. Logg inn som admin og kontroller at du fortsatt ser alle ordre og timer.
+2. Logg inn som ansatt og kontroller at du kun ser egne ordre og egne timer.
+3. Som ansatt: før timer på egen ordre og marker ordre ferdig. Ordren skal gå til `Ferdig - til fakturering`.
+4. Som admin: marker samme ordre som fakturert. Den skal flyttes til `Arkiv`.
+5. Kontroller i Supabase at nye Auth-brukere får rollen `employee` som standard.
+6. Ikke gi ansatte direkte tilgang til Supabase Table Editor. RLS beskytter API-et, men Table Editor skal kun brukes av administratorer.
