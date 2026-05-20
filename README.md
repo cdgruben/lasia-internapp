@@ -81,6 +81,33 @@ Validering:
 
 CSV-eksporten inneholder kolonnen `metode`, slik at man ser om føringen er gjort med klokkeslett eller manuelt.
 
+## Databaseskjema
+
+Supabase-skjemaet er verifisert for oppgave 5.
+
+Ordre støtter:
+
+- `planning`
+- `scheduled`
+- `in_progress`
+- `completed_pending_invoice`
+- `invoiced_archived`
+- `scheduled_start`
+- `scheduled_end`
+- `completed_at`
+- `completed_by`
+- `invoiced_at`
+- `invoiced_by`
+
+Timeføring støtter:
+
+- `entry_method` med `time_range` og `manual`
+- `start_time` som kan være tom ved manuell føring
+- `end_time` som kan være tom ved manuell føring
+- `hours` med validering større enn 0 og maks 24
+
+`supabase/schema.sql` er oppdatert for ny database. Eksisterende Supabase-prosjekt er allerede migrert gjennom oppgave 1 og 2.
+
 ## MVP
 
 - Admin oppretter ordre og tildeler ansatt.
@@ -148,6 +175,18 @@ Ingen ny SQL kreves. Oppgave 3 bruker eksisterende felter:
 
 Ingen ny SQL kreves. Oppgave 4 endrer kun adminnavigasjonen.
 
+## Oppgave 5-migrering
+
+Ingen ny SQL ble kjørt. Databasen ble kontrollert mot kravene, og alle nødvendige felter finnes allerede fra oppgave 1 og 2.
+
+Verifisert i Supabase:
+
+- `orders.status` støtter de nye statusene.
+- `orders` har `scheduled_start`, `scheduled_end`, `completed_at`, `completed_by`, `invoiced_at` og `invoiced_by`.
+- `time_entries.entry_method` støtter `time_range` og `manual`.
+- `time_entries.start_time` og `time_entries.end_time` kan være tomme.
+- `time_entries.hours` er påkrevd og har maksgrense 24.
+
 ## Test Oppgave 2
 
 1. Logg inn som ansatt.
@@ -178,3 +217,10 @@ Ingen ny SQL kreves. Oppgave 4 endrer kun adminnavigasjonen.
 3. Kontroller at `Kalender` ikke vises som egen adminfane.
 4. Logg inn som ansatt.
 5. Kontroller at ansatt fortsatt har kalender for egne jobber.
+
+## Test Oppgave 5
+
+1. Åpne Supabase Table Editor.
+2. Sjekk at `orders` har feltene `scheduled_start`, `scheduled_end`, `completed_at`, `completed_by`, `invoiced_at` og `invoiced_by`.
+3. Sjekk at `time_entries` har `entry_method`, nullable `start_time`, nullable `end_time` og `hours`.
+4. Sjekk at appen fortsatt kan opprette ordre, planlegge ordre, føre timer og eksportere CSV.
