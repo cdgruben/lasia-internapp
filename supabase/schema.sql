@@ -1,7 +1,7 @@
 create extension if not exists pgcrypto;
 
 create type public.user_role as enum ('admin', 'employee');
-create type public.order_status as enum ('ikke_startet', 'paagar', 'ferdig', 'maa_folges_opp');
+create type public.order_status as enum ('planning', 'scheduled', 'in_progress', 'completed_pending_invoice', 'invoiced_archived');
 create type public.work_type as enum ('ordinaer', 'reise', 'overtid', 'materiellhenting', 'dokumentasjon');
 
 create table public.profiles (
@@ -23,11 +23,17 @@ create table public.orders (
   phone text,
   description text not null,
   assigned_employee_id uuid references public.profiles(id) on delete set null,
-  order_date date not null,
+  order_date date,
   estimated_hours numeric(6,2),
-  status public.order_status not null default 'ikke_startet',
+  status public.order_status not null default 'planning',
   internal_comment text,
   tripletex_id text,
+  scheduled_start timestamptz,
+  scheduled_end timestamptz,
+  completed_at timestamptz,
+  completed_by uuid references public.profiles(id) on delete set null,
+  invoiced_at timestamptz,
+  invoiced_by uuid references public.profiles(id) on delete set null,
   created_by uuid references public.profiles(id) on delete set null default auth.uid(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -53,6 +59,8 @@ create table public.time_entries (
 create index orders_assigned_employee_id_idx on public.orders(assigned_employee_id);
 create index orders_order_date_idx on public.orders(order_date);
 create index orders_status_idx on public.orders(status);
+create index orders_scheduled_start_idx on public.orders(scheduled_start);
+create index orders_scheduled_end_idx on public.orders(scheduled_end);
 create index time_entries_employee_id_idx on public.time_entries(employee_id);
 create index time_entries_order_id_idx on public.time_entries(order_id);
 create index time_entries_entry_date_idx on public.time_entries(entry_date);
@@ -77,6 +85,32 @@ create trigger on_auth_user_created after insert on auth.users for each row exec
 
 create or replace function public.is_admin() returns boolean language sql stable security definer set search_path = public as $$ select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'); $$;
 create or replace function public.can_access_order(order_row public.orders) returns boolean language sql stable security definer set search_path = public as $$ select public.is_admin() or order_row.assigned_employee_id = auth.uid(); $$;
+
+create or replace function public.enforce_order_flow_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.is_admin() then
+    if new.status = 'invoiced_archived' and old.status is distinct from 'invoiced_archived' then
+      new.invoiced_at = coalesce(new.invoiced_at, now());
+      new.invoiced_by = coalesce(new.invoiced_by, auth.uid());
+    end if;
+    return new;
+  end if;
+
+  if old.assigned_employee_id = auth.uid() and new.status = 'in_progress' and old.status = 'scheduled' then
+    return new;
+  end if;
+
+  if old.assigned_employee_id = auth.uid() and new.status = 'completed_pending_invoice' and old.status in ('scheduled', 'in_progress', 'completed_pending_invoice') then
+    new.completed_at = coalesce(new.completed_at, now());
+    new.completed_by = coalesce(new.completed_by, auth.uid());
+    return new;
+  end if;
+
+  raise exception 'Ansatte kan bare starte eller ferdigmelde egne planlagte ordre.';
+end;
+$$;
+create trigger enforce_order_flow_update_trigger before update on public.orders for each row execute function public.enforce_order_flow_update();
 
 alter table public.profiles enable row level security;
 alter table public.orders enable row level security;
