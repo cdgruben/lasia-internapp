@@ -123,6 +123,17 @@ Timeføring støtter:
 
 `supabase/schema.sql` er oppdatert for ny database. Eksisterende Supabase-prosjekt er migrert gjennom oppgave 1, 2 og 6.
 
+## Verifisering
+
+Oppgave 7 er verifisert mot produksjonsbygget i Vercel.
+
+- `npm run build` ble kjørt av Vercel på commit `be1f513`.
+- Next.js kompilerte uten feil.
+- Type-/lint-sjekk i Next build passerte.
+- Produksjons-URL svarer `200 OK`.
+- Supabase-migrasjonene er registrert, inkludert `security_harden_profile_roles`.
+- `npm run lint` finnes ikke som eget script i GitHub-versjonen av `package.json`.
+
 ## MVP
 
 - Admin oppretter ordre og tildeler ansatt.
@@ -251,6 +262,17 @@ before update on public.profiles
 for each row execute function public.enforce_profile_role_update();
 ```
 
+## Oppgave 7-verifisering
+
+Denne runden ble verifisert etter oppgave 1-6:
+
+- Vercel deployment: `READY`.
+- Produksjon: `https://lasia-internapp.vercel.app/` svarer `200 OK`.
+- Vercel build-logg viser `npm run build`, `Compiled successfully`, type-/lint-sjekk og `Deployment completed`.
+- Supabase-migrasjoner er kontrollert.
+- Brukertest bekreftet at kalenderen fungerer etter endringene.
+- Brukertest bekreftet at RLS/endret sikkerhet ikke ødela appflyten.
+
 ## Test Oppgave 2
 
 1. Logg inn som ansatt.
@@ -297,3 +319,11 @@ for each row execute function public.enforce_profile_role_update();
 4. Som admin: marker samme ordre som fakturert. Den skal flyttes til `Arkiv`.
 5. Kontroller i Supabase at nye Auth-brukere får rollen `employee` som standard.
 6. Ikke gi ansatte direkte tilgang til Supabase Table Editor. RLS beskytter API-et, men Table Editor skal kun brukes av administratorer.
+
+## Test Oppgave 7
+
+1. Åpne produksjonsappen.
+2. Logg inn som admin og sjekk dashboard, ordre, planlegging, til fakturering, arkiv og timer/eksport.
+3. Logg inn som ansatt og sjekk dagens jobber, ukens jobber, kalender og timeføring.
+4. Opprett en ordre uten dato/ansatt, planlegg den, før timer, marker ferdig og marker fakturert som admin.
+5. Eksporter CSV og kontroller at kolonnene er med, inkludert `metode`.
