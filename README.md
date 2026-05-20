@@ -52,6 +52,19 @@ Adminfanen `Planlegging` har nå:
 
 Det er ikke lagt til drag-and-drop i denne MVP-runden. Datamodellen bruker `scheduled_start`, `scheduled_end` og `assigned_employee_id`, så drag-and-drop kan bygges på senere uten ny hovedstruktur.
 
+## Adminmeny
+
+Adminnavigasjonen er nå ryddet til disse hovedpunktene:
+
+- Dashboard
+- Ordre
+- Planlegging
+- Til fakturering
+- Arkiv
+- Timer/eksport
+
+Ansattvisningen beholder egen `Kalender`, siden ansatte fortsatt trenger dag-/ukevisning for egne jobber.
+
 ## Timeføring
 
 Ansatt kan velge metode per timeføring:
@@ -131,6 +144,10 @@ Ingen ny SQL kreves. Oppgave 3 bruker eksisterende felter:
 - `orders.estimated_hours`
 - `orders.status`
 
+## Oppgave 4-migrering
+
+Ingen ny SQL kreves. Oppgave 4 endrer kun adminnavigasjonen.
+
 ## Test Oppgave 2
 
 1. Logg inn som ansatt.
@@ -153,3 +170,11 @@ Ingen ny SQL kreves. Oppgave 3 bruker eksisterende felter:
 7. Kontroller at ordren forsvinner fra `Til planlegging`.
 8. Kontroller at ordren vises i ukeplanen på valgt ansatt og dag.
 9. Gå til `Kalender` og kontroller at ordren også vises der.
+
+## Test Oppgave 4
+
+1. Logg inn som admin.
+2. Kontroller at menyen viser: `Dashboard`, `Ordre`, `Planlegging`, `Til fakturering`, `Arkiv`, `Timer/eksport`.
+3. Kontroller at `Kalender` ikke vises som egen adminfane.
+4. Logg inn som ansatt.
+5. Kontroller at ansatt fortsatt har kalender for egne jobber.
