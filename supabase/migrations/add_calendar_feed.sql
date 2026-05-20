@@ -1,10 +1,10 @@
 alter table public.profiles add column if not exists calendar_token text;
 
 update public.profiles
-set calendar_token = encode(gen_random_bytes(24), 'hex')
+set calendar_token = encode(extensions.gen_random_bytes(24), 'hex')
 where calendar_token is null;
 
-alter table public.profiles alter column calendar_token set default encode(gen_random_bytes(24), 'hex');
+alter table public.profiles alter column calendar_token set default encode(extensions.gen_random_bytes(24), 'hex');
 
 create unique index if not exists profiles_calendar_token_key on public.profiles(calendar_token);
 
@@ -12,7 +12,7 @@ create or replace function public.regenerate_calendar_token(target_user_id uuid)
 returns text
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   new_token text;
@@ -21,7 +21,7 @@ begin
     raise exception 'Kun admin kan regenerere kalender-token.';
   end if;
 
-  new_token := encode(gen_random_bytes(24), 'hex');
+  new_token := encode(extensions.gen_random_bytes(24), 'hex');
 
   update public.profiles
   set calendar_token = new_token
